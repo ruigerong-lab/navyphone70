@@ -4,17 +4,43 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>สมุดโทรศัพท์กองทัพเรือ ประจำปีงบประมาณ 2570</title>
+  
+  <!-- นำเข้า Google Font: Prompt -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&display=swap" rel="stylesheet">
+  
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- กำหนดให้ Tailwind ใช้ฟอนต์ Prompt เป็นหลัก -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Prompt', 'sans-serif'],
+          },
+        },
+      },
+    }
+  </script>
+
   <!-- PapaParse -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+
+  <style>
+    /* บังคับใช้ฟอนต์ Prompt ทั้งหมดในทุก elements */
+    * {
+      font-family: 'Prompt', sans-serif !important;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 min-h-screen p-4 sm:p-6">
+<body class="bg-gray-100 min-h-screen p-4 sm:p-6 font-sans">
   <div class="max-w-4xl mx-auto">
     <!-- หัวข้อ -->
     <div class="text-center mb-6">
       <h1 class="text-2xl sm:text-3xl font-bold text-blue-900">สมุดโทรศัพท์กองทัพเรือ</h1>
-      <p class="text-sm text-gray-600 mt-1">ระบบค้นหารายชื่อและเบอร์โทรศัพท์</p>
+      <p class="text-sm text-gray-600 mt-1">ระบบค้นหารายชื่อและเบอร์โทรศัพท์แยกตามสำนักงาน</p>
     </div>
     
     <!-- ช่องค้นหา -->
@@ -66,7 +92,6 @@
         return;
       }
 
-      // Group ข้อมูลตาม "สำนักงาน" โดยใช้ Map เพื่อรักษาลำดับแถว (Order of insertion)
       const groups = new Map();
 
       data.forEach(item => {
@@ -82,12 +107,10 @@
         groups.get(office).push(item);
       });
 
-      // แสดงผลแต่ละกลุ่มสำนักงาน
       groups.forEach((items, officeName) => {
         const section = document.createElement('div');
         section.className = 'bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden';
 
-        // หัวข้อกลุ่มสำนักงาน
         let html = `
           <div class="bg-blue-900 text-white px-5 py-3 flex items-center justify-between">
             <h2 class="font-bold text-lg flex items-center gap-2">
@@ -100,7 +123,6 @@
           <div class="divide-y divide-gray-100">
         `;
 
-        // รายชื่อภายในสำนักงานนั้นๆ (เรียงตามลำดับในไฟล์)
         items.forEach(item => {
           const fullName = item['ยศ - ชื่อ - สกุล - คำต่อท้าย'] || 
                            `${item['ยศ'] || ''}${item['ชื่อ'] || ''} ${item['นามสกุล'] || ''} ${item['คำต่อท้าย'] || ''}`.trim();
@@ -138,7 +160,6 @@
       });
     }
 
-    // ฟังก์ชันค้นหาข้อมูล
     function filterContacts() {
       const query = document.getElementById('searchInput').value.toLowerCase().trim();
       const filtered = allContacts.filter(item => {
