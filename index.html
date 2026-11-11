@@ -42,7 +42,7 @@
         🔒
       </div>
       <div>
-        <h2 class="text-2xl font-bold text-blue-900">เข้าสู่ระบบสมุดโทรศัพท์กองทัพเรือ ประจำปีงบประมาณ 2570</h2>
+        <h2 class="text-2xl font-bold text-blue-900">เข้าสู่ระบบสมุดโทรศัพท์กองทัพเรือ</h2>
         <p class="text-sm text-gray-500 mt-1">กรุณากรอกรหัสผ่านเพื่อยืนยันตัวตนก่อนใช้งาน</p>
       </div>
       <form onsubmit="handleLogin(event)" class="space-y-4">
@@ -75,31 +75,37 @@
     <!-- ช่องค้นหา -->
     <div>
       <input type="text" id="searchInput" onkeyup="filterContacts()" 
-             placeholder="🔍 ค้นหา สำนักงาน, ยศ, ชื่อ, นามสกุล, ตำแหน่ง, เบอร์โทร..." 
+             placeholder="🔍 ค้นหา กรม/ฝ่าย, สำนักงาน, ยศ, ชื่อ, นามสกุล, ตำแหน่ง, เบอร์โทร..." 
              class="w-full p-3.5 sm:p-4 rounded-xl border border-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 text-gray-800 bg-white text-base">
     </div>
 
-    <!-- ส่วนเลือกสำนักงาน (ปรับปรุงใหม่ ไม่ล้นหน้าจอ) -->
-    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 space-y-3">
-      <div class="flex items-center justify-between">
-        <label for="officeSelect" class="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-          <span>📂</span> เลือกสำนักงาน:
+    <!-- ส่วนเลือก กรม/ฝ่าย และ สำนักงาน (ที่คั่นหนังสือ) -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 space-y-4">
+      
+      <!-- เลือก กรม/ฝ่ายอำนวยการ -->
+      <div class="space-y-1.5">
+        <label class="text-xs sm:text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+          <span>🏛️</span> เลือกกรม / ฝ่ายอำนวยการ:
         </label>
-        <span id="totalOfficeBadge" class="text-xs bg-gray-100 text-gray-600 px-2.5 py-0.5 rounded-full font-medium"></span>
+        <div id="deptTabs" class="flex flex-wrap gap-2">
+          <!-- ปุ่มกรม/ฝ่ายจะถูกสร้างที่นี่ -->
+        </div>
       </div>
 
-      <!-- Dropdown สำหรับจอทุกขนาด เลือกง่าย ไม่ล้นจอ -->
-      <div>
+      <!-- เลือก สำนักงาน (ย่อยตามกรมที่เลือก) -->
+      <div class="space-y-1.5 pt-2 border-t border-gray-100">
+        <div class="flex items-center justify-between">
+          <label class="text-xs sm:text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+            <span>📂</span> เลือกสำนักงาน:
+          </label>
+          <span id="totalOfficeBadge" class="text-xs bg-gray-100 text-gray-600 px-2.5 py-0.5 rounded-full font-medium"></span>
+        </div>
         <select id="officeSelect" onchange="onOfficeSelectChange(this.value)" 
                 class="w-full p-3 rounded-lg border border-gray-300 bg-gray-50 text-gray-800 font-medium text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer shadow-sm">
-          <!-- ตัวเลือกสำนักงานจะถูกโหลดที่นี่ -->
+          <!-- ตัวเลือกสำนักงาน -->
         </select>
       </div>
 
-      <!-- แท็บปุ่มลอยเรียงต่อกัน (Wrap) พอดีหน้าจอ สำหรับจอกว้าง -->
-      <div id="officeButtonsWrap" class="flex flex-wrap gap-2 pt-1 border-t border-gray-100 mt-2">
-        <!-- ปุ่มแท็บจะสร้างอัตโนมัติ -->
-      </div>
     </div>
 
     <!-- รายการแสดงผลตามสำนักงานที่เลือก -->
@@ -122,9 +128,9 @@
     const CORRECT_PASSWORD = 'rtn@2027';
 
     let allContacts = [];
-    let currentDept = '';
-    let selectedOffice = '';
-    let officeList = [];
+    let currentDeptValue = '';
+    let currentOfficeValue = '';
+    let hierarchyData = {}; // เก็บโครงสร้าง กรม -> สำนักงาน -> รายชื่อ
 
     window.addEventListener('DOMContentLoaded', () => {
       if (sessionStorage.getItem('isLoggedIn') === 'true') {
@@ -165,109 +171,142 @@
         header: true,
         skipEmptyLines: true,
         complete: function(results) {
+          let lastDept = '';
+          let lastOffice = '';
+
           allContacts = results.data.map(item => {
-            if (item['หน่วยงาน'] && item['หน่วยงาน'].trim() !== '') {
-              currentDept = item['หน่วยงาน'].trim();
+            // Forward Fill กรม/ฝ่ายอำนวยการ
+            if (item['กรม/ฝ่ายอำนวยการ'] && item['กรม/ฝ่ายอำนวยการ'].trim() !== '') {
+              lastDept = item['กรม/ฝ่ายอำนวยการ'].trim();
             } else {
-              item['หน่วยงาน'] = currentDept;
+              item['กรม/ฝ่ายอำนวยการ'] = lastDept;
+            }
+
+            // Forward Fill สำนักงาน
+            if (item['สำนักงาน'] && item['สำนักงาน'].trim() !== '') {
+              lastOffice = item['สำนักงาน'].trim();
+            } else {
+              item['สำนักงาน'] = lastOffice;
             }
             return item;
           });
 
-          initOfficeNavigation(allContacts);
+          buildHierarchy(allContacts);
         }
       });
     }
 
-    // สร้างเมนูเลือกสำนักงาน
-    function initOfficeNavigation(data) {
-      officeList = [];
+    // จัดระเบียบข้อมูลเป็นโครงสร้าง กรม -> สำนักงาน
+    function buildHierarchy(data) {
+      hierarchyData = {};
+
       data.forEach(item => {
         const fullName = item['ยศ - ชื่อ - สกุล - คำต่อท้าย'] || 
                          `${item['ยศ'] || ''}${item['ชื่อ'] || ''} ${item['นามสกุล'] || ''} ${item['คำต่อท้าย'] || ''}`.trim();
         if (!fullName) return;
 
-        const office = item['สำนักงาน'] && item['สำนักงาน'].trim() !== '' ? item['สำนักงาน'].trim() : 'สำนักงานอื่นๆ';
-        if (!officeList.includes(office)) {
-          officeList.push(office);
+        const dept = item['กรม/ฝ่ายอำนวยการ'] || 'หน่วยงานอื่นๆ';
+        const office = item['สำนักงาน'] || 'สำนักงานอื่นๆ';
+
+        if (!hierarchyData[dept]) {
+          hierarchyData[dept] = {};
         }
+        if (!hierarchyData[dept][office]) {
+          hierarchyData[dept][office] = [];
+        }
+        hierarchyData[dept][office].push(item);
       });
 
-      if (officeList.length > 0) {
-        selectedOffice = officeList[0];
+      const depts = Object.keys(hierarchyData);
+      if (depts.length > 0) {
+        currentDeptValue = depts[0];
+        const offices = Object.keys(hierarchyData[currentDeptValue]);
+        if (offices.length > 0) {
+          currentOfficeValue = offices[0];
+        }
       }
 
-      document.getElementById('totalOfficeBadge').textContent = `รวม ${officeList.length} สำนักงาน`;
-      renderOfficeControls();
-      renderContacts(data, selectedOffice);
+      renderDeptTabs();
+      updateOfficeDropdown();
+      renderContacts(currentDeptValue, currentOfficeValue);
     }
 
-    function renderOfficeControls() {
-      // 1. เติมตัวเลือกใน Dropdown
+    // สร้างปุ่มเลือก กรม/ฝ่าย
+    function renderDeptTabs() {
+      const deptTabsEl = document.getElementById('deptTabs');
+      deptTabsEl.innerHTML = '';
+
+      Object.keys(hierarchyData).forEach(dept => {
+        const btn = document.createElement('button');
+        const isActive = dept === currentDeptValue;
+        btn.className = `px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition shadow-sm ${
+          isActive 
+            ? 'bg-blue-900 text-white' 
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+        }`;
+        btn.innerHTML = `🏛️ ${dept}`;
+        btn.onclick = () => {
+          currentDeptValue = dept;
+          const offices = Object.keys(hierarchyData[currentDeptValue]);
+          currentOfficeValue = offices.length > 0 ? offices[0] : '';
+          document.getElementById('searchInput').value = '';
+          renderDeptTabs();
+          updateOfficeDropdown();
+          renderContacts(currentDeptValue, currentOfficeValue);
+        };
+        deptTabsEl.appendChild(btn);
+      });
+    }
+
+    // อัปเดตรายการสำนักงานใน Dropdown ตาม กรม ที่เลือก
+    function updateOfficeDropdown() {
       const selectEl = document.getElementById('officeSelect');
       selectEl.innerHTML = '';
-      officeList.forEach(office => {
+
+      const offices = hierarchyData[currentDeptValue] ? Object.keys(hierarchyData[currentDeptValue]) : [];
+      
+      let totalCount = 0;
+      offices.forEach(office => {
+        totalCount += hierarchyData[currentDeptValue][office].length;
         const opt = document.createElement('option');
         opt.value = office;
-        opt.textContent = `🏢 ${office}`;
-        if (office === selectedOffice) opt.selected = true;
+        opt.textContent = `🏢 ${office} (${hierarchyData[currentDeptValue][office].length} รายการ)`;
+        if (office === currentOfficeValue) opt.selected = true;
         selectEl.appendChild(opt);
       });
 
-      // 2. เติมปุ่มแท็บ (Flex Wrap เรียงต่อหลายบรรทัดอัตโนมัติ ไม่ล้นจอ)
-      const btnContainer = document.getElementById('officeButtonsWrap');
-      btnContainer.innerHTML = '';
-      officeList.forEach(office => {
-        const btn = document.createElement('button');
-        const isActive = office === selectedOffice;
-        btn.className = `px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition ${
-          isActive 
-            ? 'bg-blue-900 text-white shadow-sm' 
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-        }`;
-        btn.innerHTML = `🏢 ${office}`;
-        btn.onclick = () => onOfficeSelectChange(office);
-        btnContainer.appendChild(btn);
-      });
+      document.getElementById('totalOfficeBadge').textContent = `${offices.length} สำนักงานในหมวดนี้`;
     }
 
     function onOfficeSelectChange(officeName) {
-      selectedOffice = officeName;
+      currentOfficeValue = officeName;
       document.getElementById('searchInput').value = '';
-      renderOfficeControls();
-      renderContacts(allContacts, selectedOffice);
+      renderContacts(currentDeptValue, currentOfficeValue);
     }
 
-    // แสดงรายชื่อของสำนักงานที่เลือก
-    function renderContacts(data, officeName) {
+    // แสดงรายชื่อตาม กรม และ สำนักงาน ที่เลือก
+    function renderContacts(deptName, officeName) {
       const listDiv = document.getElementById('contactList');
       const titleEl = document.getElementById('currentOfficeTitle');
       const countEl = document.getElementById('currentOfficeCount');
 
-      const filteredByOffice = data.filter(item => {
-        const fullName = item['ยศ - ชื่อ - สกุล - คำต่อท้าย'] || 
-                         `${item['ยศ'] || ''}${item['ชื่อ'] || ''} ${item['นามสกุล'] || ''} ${item['คำต่อท้าย'] || ''}`.trim();
-        if (!fullName) return false;
-        const office = item['สำนักงาน'] && item['สำนักงาน'].trim() !== '' ? item['สำนักงาน'].trim() : 'สำนักงานอื่นๆ';
-        return office === officeName;
-      });
+      const items = (hierarchyData[deptName] && hierarchyData[deptName][officeName]) ? hierarchyData[deptName][officeName] : [];
 
       titleEl.innerHTML = `🏢 ${officeName}`;
-      countEl.textContent = `${filteredByOffice.length} รายการ`;
+      countEl.textContent = `${items.length} รายการ`;
       listDiv.innerHTML = '';
 
-      if (filteredByOffice.length === 0) {
+      if (items.length === 0) {
         listDiv.innerHTML = '<div class="text-center py-10 text-gray-500">ไม่พบรายชื่อในสำนักงานนี้</div>';
         return;
       }
 
-      filteredByOffice.forEach(item => {
+      items.forEach(item => {
         const fullName = item['ยศ - ชื่อ - สกุล - คำต่อท้าย'] || 
                          `${item['ยศ'] || ''}${item['ชื่อ'] || ''} ${item['นามสกุล'] || ''} ${item['คำต่อท้าย'] || ''}`.trim();
-        const dept = item['หน่วยงาน'] || '';
         const position = item['ตำแหน่ง'] || '';
-        const phoneNavy = item['โทรศัพท์ ทร.'] && item['โทรศัพท์ ทร.'] !== '-' ? item['โทรศัพท์ ทร.'] : null;
-        const phoneMobile = item['โทรศัพท์มือถือ1'] && item['โทรศัพท์มือถือ1'] !== '-' ? item['โทรศัพท์มือถือ1'] : null;
+        const phoneNavy = item['โทรศัพท์ ทร.'] && String(item['โทรศัพท์ ทร.']) !== '-' ? item['โทรศัพท์ ทร.'] : null;
+        const phoneMobile = item['โทรศัพท์มือถือ1'] && String(item['โทรศัพท์มือถือ1']) !== '-' ? item['โทรศัพท์มือถือ1'] : null;
 
         const row = document.createElement('div');
         row.className = 'p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50 transition';
@@ -275,7 +314,7 @@
           <div class="space-y-0.5">
             <h3 class="font-bold text-gray-900 text-base sm:text-lg">${fullName}</h3>
             <p class="text-sm font-semibold text-blue-800">${position}</p>
-            <p class="text-xs text-gray-400">${dept}</p>
+            <p class="text-xs text-gray-400">${deptName} • ${officeName}</p>
             <div class="flex flex-wrap gap-4 pt-1.5 text-sm">
               ${phoneNavy ? `<span class="text-gray-700">☎️ ทร.: <strong class="text-gray-900">${phoneNavy}</strong></span>` : ''}
               ${phoneMobile ? `<span class="text-gray-700">📱 มือถือ: <strong class="text-gray-900">${phoneMobile}</strong></span>` : ''}
@@ -283,7 +322,7 @@
           </div>
           <div class="flex items-center gap-2 shrink-0">
             ${phoneMobile ? `
-              <a href="tel:${phoneMobile.replace(/[^0-9+]/g, '')}" 
+              <a href="tel:${String(phoneMobile).replace(/[^0-9+]/g, '')}" 
                  class="w-full sm:w-auto text-center bg-green-600 hover:bg-green-700 text-white px-3.5 py-1.5 rounded-lg font-medium text-xs sm:text-sm flex items-center justify-center gap-1 shadow-sm">
                 📞 โทรออก
               </a>
@@ -294,7 +333,7 @@
       });
     }
 
-    // ฟังก์ชันค้นหาข้อมูล
+    // ฟังก์ชันค้นหาข้ามทุกหน่วยงาน
     function filterContacts() {
       const query = document.getElementById('searchInput').value.toLowerCase().trim();
       const listDiv = document.getElementById('contactList');
@@ -302,25 +341,19 @@
       const countEl = document.getElementById('currentOfficeCount');
 
       if (!query) {
-        renderContacts(allContacts, selectedOffice);
+        renderContacts(currentDeptValue, currentOfficeValue);
         return;
       }
 
       const filtered = allContacts.filter(item => {
         const fullName = (item['ยศ - ชื่อ - สกุล - คำต่อท้าย'] || '').toLowerCase();
-        const firstName = (item['ชื่อ'] || '').toLowerCase();
-        const lastName = (item['นามสกุล'] || '').toLowerCase();
-        const rank = (item['ยศ'] || '').toLowerCase();
-        const dept = (item['หน่วยงาน'] || '').toLowerCase();
+        const dept = (item['กรม/ฝ่ายอำนวยการ'] || '').toLowerCase();
         const office = (item['สำนักงาน'] || '').toLowerCase();
         const position = (item['ตำแหน่ง'] || '').toLowerCase();
-        const phoneNavy = (item['โทรศัพท์ ทร.'] || '').toLowerCase();
-        const phoneMobile = (item['โทรศัพท์มือถือ1'] || '').toLowerCase();
+        const phoneNavy = String(item['โทรศัพท์ ทร.'] || '').toLowerCase();
+        const phoneMobile = String(item['โทรศัพท์มือถือ1'] || '').toLowerCase();
 
         return fullName.includes(query) || 
-               firstName.includes(query) || 
-               lastName.includes(query) || 
-               rank.includes(query) || 
                dept.includes(query) || 
                office.includes(query) || 
                position.includes(query) || 
@@ -340,22 +373,21 @@
       filtered.forEach(item => {
         const fullName = item['ยศ - ชื่อ - สกุล - คำต่อท้าย'] || 
                          `${item['ยศ'] || ''}${item['ชื่อ'] || ''} ${item['นามสกุล'] || ''} ${item['คำต่อท้าย'] || ''}`.trim();
-        const dept = item['หน่วยงาน'] || '';
+        const dept = item['กรม/ฝ่ายอำนวยการ'] || '';
         const office = item['สำนักงาน'] || '';
         const position = item['ตำแหน่ง'] || '';
-        const phoneNavy = item['โทรศัพท์ ทร.'] && item['โทรศัพท์ ทร.'] !== '-' ? item['โทรศัพท์ ทร.'] : null;
-        const phoneMobile = item['โทรศัพท์มือถือ1'] && item['โทรศัพท์มือถือ1'] !== '-' ? item['โทรศัพท์มือถือ1'] : null;
+        const phoneNavy = item['โทรศัพท์ ทร.'] && String(item['โทรศัพท์ ทร.']) !== '-' ? item['โทรศัพท์ ทร.'] : null;
+        const phoneMobile = item['โทรศัพท์มือถือ1'] && String(item['โทรศัพท์มือถือ1']) !== '-' ? item['โทรศัพท์มือถือ1'] : null;
 
         const row = document.createElement('div');
         row.className = 'p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50 transition';
         row.innerHTML = `
           <div class="space-y-0.5">
             <div class="flex items-center gap-2">
-              <span class="bg-blue-100 text-blue-900 text-xs px-2 py-0.5 rounded font-medium">${office}</span>
+              <span class="bg-blue-100 text-blue-900 text-xs px-2 py-0.5 rounded font-medium">${dept} / ${office}</span>
               <h3 class="font-bold text-gray-900 text-base sm:text-lg">${fullName}</h3>
             </div>
             <p class="text-sm font-semibold text-blue-800">${position}</p>
-            <p class="text-xs text-gray-400">${dept}</p>
             <div class="flex flex-wrap gap-4 pt-1.5 text-sm">
               ${phoneNavy ? `<span class="text-gray-700">☎️ ทร.: <strong class="text-gray-900">${phoneNavy}</strong></span>` : ''}
               ${phoneMobile ? `<span class="text-gray-700">📱 มือถือ: <strong class="text-gray-900">${phoneMobile}</strong></span>` : ''}
@@ -363,7 +395,7 @@
           </div>
           <div class="flex items-center gap-2 shrink-0">
             ${phoneMobile ? `
-              <a href="tel:${phoneMobile.replace(/[^0-9+]/g, '')}" 
+              <a href="tel:${String(phoneMobile).replace(/[^0-9+]/g, '')}" 
                  class="w-full sm:w-auto text-center bg-green-600 hover:bg-green-700 text-white px-3.5 py-1.5 rounded-lg font-medium text-xs sm:text-sm flex items-center justify-center gap-1 shadow-sm">
                 📞 โทรออก
               </a>
