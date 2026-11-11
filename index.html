@@ -5,14 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>สมุดโทรศัพท์กองทัพเรือ ประจำปีงบประมาณ 2570</title>
   
-  <!-- นำเข้า Google Font: Prompt -->
+  <!-- Google Font: Prompt -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&display=swap" rel="stylesheet">
   
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- กำหนดให้ Tailwind ใช้ฟอนต์ Prompt เป็นหลัก -->
   <script>
     tailwind.config = {
       theme: {
@@ -29,18 +28,45 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 
   <style>
-    /* บังคับใช้ฟอนต์ Prompt ทั้งหมดในทุก elements */
     * {
       font-family: 'Prompt', sans-serif !important;
     }
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen p-4 sm:p-6 font-sans">
-  <div class="max-w-4xl mx-auto">
+
+  <!-- ================= หน้าจอยืนยันรหัสผ่าน (Login Screen) ================= -->
+  <div id="authScreen" class="fixed inset-0 bg-blue-950 flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 text-center space-y-6">
+      <div class="w-16 h-16 bg-blue-100 text-blue-900 rounded-full flex items-center justify-center mx-auto text-2xl font-bold">
+        🔒
+      </div>
+      <div>
+        <h2 class="text-2xl font-bold text-blue-900">เข้าสู่ระบบสมุดโทรศัพท์กองทัพเรือ ประจำปีงบประมาณ 2570</h2>
+        <p class="text-sm text-gray-500 mt-1">กรุณากรอกรหัสผ่านเพื่อยืนยันตัวตนก่อนใช้งาน</p>
+      </div>
+      <form onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <input type="password" id="passwordInput" placeholder="กรอกรหัสผ่าน..." 
+                 class="w-full p-3.5 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 text-center text-lg tracking-widest" required>
+          <p id="errorMessage" class="text-red-500 text-xs mt-2 hidden">รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง</p>
+        </div>
+        <button type="submit" class="w-full bg-blue-900 hover:bg-blue-800 text-white py-3 rounded-xl font-medium shadow-md transition">
+          เข้าสู่ระบบ
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= หน้าจอสมุดโทรศัพท์ (หลัก) ================= -->
+  <div id="mainApp" class="max-w-4xl mx-auto hidden">
     <!-- หัวข้อ -->
-    <div class="text-center mb-6">
-      <h1 class="text-2xl sm:text-3xl font-bold text-blue-900">สมุดโทรศัพท์กองทัพเรือ</h1>
-      <p class="text-sm text-gray-600 mt-1">ระบบค้นหารายชื่อและเบอร์โทรศัพท์แยกตามสำนักงาน</p>
+    <div class="text-center mb-6 relative">
+      <button onclick="handleLogout()" class="absolute right-0 top-0 text-xs bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg transition font-medium">
+        ออกจากระบบ 🔒
+      </button>
+      <h1 class="text-2xl sm:text-3xl font-bold text-blue-900 pt-6 sm:pt-0">สมุดโทรศัพท์กองทัพเรือ ประจำปีงบประมาณ 2570</h1>
+      <p class="text-sm text-gray-600 mt-1">ระบบค้นหารายชื่อและเบอร์โทรศัพท์</p>
     </div>
     
     <!-- ช่องค้นหา -->
@@ -61,28 +87,69 @@
     // *** วาง URL CSV จาก Google Sheets ของคุณที่นี่ ***
     // -------------------------------------------------------------
     const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT-mD711zr90-qDLfHNBIqaFtoPollgPBtpwIeUJ_plDR4Ew9r6cRCrievQazYMhQ/pub?output=csv';
+    const CORRECT_PASSWORD = 'rtn@2027';
 
     let allContacts = [];
     let currentDept = '';
 
-    Papa.parse(SHEET_CSV_URL, {
-      download: true,
-      header: true,
-      skipEmptyLines: true,
-      complete: function(results) {
-        allContacts = results.data.map(item => {
-          if (item['หน่วยงาน'] && item['หน่วยงาน'].trim() !== '') {
-            currentDept = item['หน่วยงาน'].trim();
-          } else {
-            item['หน่วยงาน'] = currentDept;
-          }
-          return item;
-        });
-        renderContactsGrouped(allContacts);
+    // ตรวจสอบว่าเคยยืนยันตัวตนไปแล้วหรือยังใน Session นี้
+    window.addEventListener('DOMContentLoaded', () => {
+      if (sessionStorage.getItem('isLoggedIn') === 'true') {
+        showApp();
       }
     });
 
-    // ฟังก์ชันจัดกลุ่มข้อมูลตาม "สำนักงาน" โดยคงลำดับเดิมไว้
+    // ฟังก์ชันตรวจสอบรหัสผ่าน
+    function handleLogin(event) {
+      event.preventDefault();
+      const inputPass = document.getElementById('passwordInput').value;
+      const errorMsg = document.getElementById('errorMessage');
+
+      if (inputPass === CORRECT_PASSWORD) {
+        sessionStorage.setItem('isLoggedIn', 'true');
+        showApp();
+      } else {
+        errorMsg.classList.remove('hidden');
+        document.getElementById('passwordInput').value = '';
+      }
+    }
+
+    // ฟังก์ชันแสดงหน้าแอปหลักและโหลดข้อมูล
+    function showApp() {
+      document.getElementById('authScreen').classList.add('hidden');
+      document.getElementById('mainApp').classList.remove('hidden');
+      loadContactsData();
+    }
+
+    // ฟังก์ชันออกจากระบบ
+    function handleLogout() {
+      sessionStorage.removeItem('isLoggedIn');
+      location.reload();
+    }
+
+    // โหลดข้อมูล CSV
+    function loadContactsData() {
+      if (allContacts.length > 0) return; // โหลดครั้งเดียว
+
+      Papa.parse(SHEET_CSV_URL, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          allContacts = results.data.map(item => {
+            if (item['หน่วยงาน'] && item['หน่วยงาน'].trim() !== '') {
+              currentDept = item['หน่วยงาน'].trim();
+            } else {
+              item['หน่วยงาน'] = currentDept;
+            }
+            return item;
+          });
+          renderContactsGrouped(allContacts);
+        }
+      });
+    }
+
+    // ฟังก์ชันจัดกลุ่มข้อมูลตาม "สำนักงาน"
     function renderContactsGrouped(data) {
       const listDiv = document.getElementById('contactList');
       listDiv.innerHTML = '';
@@ -160,6 +227,7 @@
       });
     }
 
+    // ฟังก์ชันค้นหาข้อมูล
     function filterContacts() {
       const query = document.getElementById('searchInput').value.toLowerCase().trim();
       const filtered = allContacts.filter(item => {
